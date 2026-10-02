@@ -7,7 +7,13 @@ from api import Api
 from playbackmanager import PlaybackManager
 from player import UpNextPlayer
 from statichelper import to_unicode
+from torrentcache import elementum_dirs, restore_all_cached
 from utils import decode_json, get_property, get_setting_bool, kodi_version_major, log as ulog
+
+# Seconds between background restores of cached .torrent files. Runs
+# regardless of episode tracking: playlist auto-advance or a manual
+# "next" press can play an Elementum URL without Up Next driving.
+RESTORE_SWEEP_INTERVAL = 15
 
 
 class UpNextMonitor(Monitor):
@@ -19,10 +25,23 @@ class UpNextMonitor(Monitor):
         self.player = UpNextPlayer()
         self.api = Api()
         self.playback_manager = PlaybackManager()
+        self._restore_tick = 0
 
     def log(self, msg, level=1):
         """Log wrapper"""
         ulog(msg, name=self.__class__.__name__, level=level)
+
+    def _restore_cached_torrents(self):
+        """Put cached .torrent files back if Elementum removed them."""
+        if not get_setting_bool('repairFragileUrls'):
+            return
+        try:
+            temp_dir, cache_dir = elementum_dirs()
+            restored = restore_all_cached(temp_dir, cache_dir)
+        except Exception:
+            return
+        for infohash in restored:
+            self.log('Restored cached .torrent: %s' % infohash, 2)
 
     def run(self):  # pylint: disable=too-many-branches
         """Main service loop"""
@@ -33,6 +52,11 @@ class UpNextMonitor(Monitor):
             if self.waitForAbort(1):
                 # Abort was requested while waiting. We should exit
                 break
+
+            self._restore_tick += 1
+            if self._restore_tick >= RESTORE_SWEEP_INTERVAL:
+                self._restore_tick = 0
+                self._restore_cached_torrents()
 
             if not self.player.is_tracking():
                 continue

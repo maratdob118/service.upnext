@@ -27,9 +27,21 @@ try:
 except ImportError:  # Python 2
     from urlparse import parse_qsl, urlsplit
 
+try:
+    from urllib.request import urlopen
+except ImportError:  # Python 2
+    from urllib2 import urlopen
+
+import re
+
 CACHE_SUBDIR = 'torrent_cache'
 CACHED_SUFFIX = '.torrent'
 MAX_CACHED_FILES = 20
+# Elementum daemon HTTP API (local only) listing active torrents.
+DAEMON_TORRENTS_URL = 'http://127.0.0.1:65220/torrents/'
+DAEMON_TIMEOUT = 2
+_INFOHASH_RE = re.compile(
+    r'(?:infohash|resume)["\']?\s*[:=]\s*["\']?([0-9a-fA-F]{40})')
 
 
 def parse_elementum_history_url(url):
@@ -99,6 +111,55 @@ def restore_torrent_file(infohash, temp_dir, cache_dir):
     except (OSError, IOError):
         return False
     return True
+
+
+def extract_infohashes(text):
+    """Find torrent infohashes in arbitrary text (URLs, daemon JSON)."""
+    if not text:
+        return set()
+    try:
+        return set(match.group(1).lower() for match in _INFOHASH_RE.finditer(text))
+    except Exception:
+        return set()
+
+
+def daemon_infohashes(url=DAEMON_TORRENTS_URL, timeout=DAEMON_TIMEOUT):
+    """Infohashes of torrents known to the local Elementum daemon.
+
+    Best effort: the daemon may be down or busy, then an empty set is
+    returned. Used to snapshot .torrent files without relying on the
+    (already resolved) Kodi playback URL.
+    """
+    try:
+        response = urlopen(url, timeout=timeout)
+        try:
+            payload = response.read().decode('utf-8', 'replace')
+        finally:
+            response.close()
+    except Exception:
+        return set()
+    return extract_infohashes(payload)
+
+
+def restore_all_cached(temp_dir, cache_dir):
+    """Restore every cached .torrent missing from the temp dir."""
+    restored = []
+    try:
+        names = os.listdir(cache_dir)
+    except OSError:
+        return restored
+    for name in names:
+        if not name.endswith(CACHED_SUFFIX):
+            continue
+        infohash = name[:-len(CACHED_SUFFIX)]
+        if os.path.isfile(os.path.join(temp_dir, name)):
+            continue
+        try:
+            if restore_torrent_file(infohash, temp_dir, cache_dir):
+                restored.append(infohash)
+        except (OSError, IOError):
+            continue
+    return restored
 
 
 def _prune_cache(cache_dir, max_files):

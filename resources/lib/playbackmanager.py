@@ -121,6 +121,10 @@ class PlaybackManager:
         # Signal to trakt previous episode watched
         event(message='NEXTUPWATCHEDSIGNAL', data={'episodeid': self.state.current_episode_id}, encoding='base64')
         if source == 'playlist' or queued:
+            # Make sure an Elementum season-pack URL resolves: the daemon
+            # deletes the .torrent file the moment the previous episode
+            # ends, so restore our snapshot before advancing.
+            self.api.ensure_elementum_torrent((episode or {}).get('file', ''))
             # Play playlist media
             if should_play_non_default:
                 # Only start the next episode if the user asked for it specifically
