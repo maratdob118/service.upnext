@@ -5,6 +5,8 @@ from __future__ import absolute_import, division, unicode_literals
 from xbmc import getCondVisibility, Player, Monitor
 from api import Api
 from state import State
+from torrentcache import cache_torrent_file, elementum_dirs, parse_elementum_history_url
+from utils import get_setting_bool, log as ulog
 
 
 class UpNextPlayer(Player):
@@ -38,6 +40,31 @@ class UpNextPlayer(Player):
             self.api.reset_queue()
             self.state.queued = False
 
+    def _cache_elementum_torrent(self):
+        """Snapshot the .torrent file while playback (and the file) is live.
+
+        Elementum deletes it the moment the episode ends, which breaks the
+        next-episode URL of the same season pack. Cached early, restored
+        (see api.ensure_elementum_torrent) in the autoplay path itself.
+        """
+        try:
+            playing_file = self.getPlayingFile()
+        except RuntimeError:
+            return
+        infohash, _index = parse_elementum_history_url(playing_file)
+        if not infohash or not get_setting_bool('repairFragileUrls'):
+            return
+        try:
+            temp_dir, cache_dir = elementum_dirs()
+        except Exception:
+            return
+        try:
+            if cache_torrent_file(infohash, temp_dir, cache_dir):
+                ulog('Cached .torrent for next-episode switch: %s' % infohash,
+                     name=self.__class__.__name__, level=2)
+        except Exception:
+            pass
+
     def _check_video(self):
         self.monitor.waitForAbort(5)
         if not getCondVisibility('videoplayer.content(episodes)'):
@@ -52,11 +79,13 @@ class UpNextPlayer(Player):
         def onPlayBackStarted(self):  # pylint: disable=invalid-name
             """Will be called when kodi starts playing a file"""
             self.reset_queue()
+            self._cache_elementum_torrent()
     else:
         def onPlayBackStarted(self):  # pylint: disable=invalid-name
             """Will be called when kodi starts playing a file"""
             self.reset_queue()
             self._check_video()
+            self._cache_elementum_torrent()
 
     def onPlayBackPaused(self):  # pylint: disable=invalid-name
         self.state.pause = True

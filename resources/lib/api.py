@@ -4,6 +4,7 @@
 from __future__ import absolute_import, division, unicode_literals
 from xbmc import sleep, PLAYLIST_VIDEO, PLAYLIST_MUSIC
 from playurl import repair_play_url
+from torrentcache import elementum_dirs, parse_elementum_history_url, restore_torrent_file
 from utils import event, get_int, get_setting_bool, get_setting_int, jsonrpc, log as ulog
 
 
@@ -164,10 +165,36 @@ class Api:
         self.log('Next item in playlist: %s' % item, 2)
         return item
 
+    def ensure_elementum_torrent(self, url):
+        """Restore a cached .torrent file before Elementum needs it.
+
+        Elementum deletes the file when the current episode ends, so the
+        next-episode URL of the same pack would find nothing. The snapshot
+        was taken on playback start (see player._cache_elementum_torrent).
+        Returns True when the file is (now) in place.
+        """
+        infohash, _index = parse_elementum_history_url(url)
+        if not infohash:
+            return False
+        try:
+            temp_dir, cache_dir = elementum_dirs()
+        except Exception:
+            return False
+        try:
+            restored = restore_torrent_file(infohash, temp_dir, cache_dir)
+        except Exception:
+            return False
+        if restored:
+            self.log('Elementum .torrent ready for next episode: %s' % infohash, 2)
+        else:
+            self.log('No cached .torrent for next episode: %s' % infohash, 1)
+        return restored
+
     def repaired_play_url(self, url):
         """Repair a fragile add-on URL unless disabled in settings."""
         if not url or not get_setting_bool('repairFragileUrls'):
             return url
+        self.ensure_elementum_torrent(url)
         repaired, changed = repair_play_url(url)
         if changed:
             self.log('Repaired fragile play URL: %s -> %s' % (url, repaired), 2)
