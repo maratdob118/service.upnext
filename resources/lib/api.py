@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import, division, unicode_literals
 from xbmc import sleep, PLAYLIST_VIDEO, PLAYLIST_MUSIC
+from playurl import repair_play_url
 from utils import event, get_int, get_setting_bool, get_setting_int, jsonrpc, log as ulog
 
 
@@ -90,7 +91,7 @@ class Api:
         if not self.data:
             next_item.update(episodeid=episode.get('episodeid'))
         elif self.data.get('play_url'):
-            next_item.update(file=self.data.get('play_url'))
+            next_item.update(file=self.repaired_play_url(self.data.get('play_url')))
 
         if next_item:
             jsonrpc(
@@ -163,10 +164,19 @@ class Api:
         self.log('Next item in playlist: %s' % item, 2)
         return item
 
+    def repaired_play_url(self, url):
+        """Repair a fragile add-on URL unless disabled in settings."""
+        if not url or not get_setting_bool('repairFragileUrls'):
+            return url
+        repaired, changed = repair_play_url(url)
+        if changed:
+            self.log('Repaired fragile play URL: %s -> %s' % (url, repaired), 2)
+        return repaired
+
     def play_addon_item(self):
         if self.data.get('play_url'):
             self.log('Playing the next episode directly: %(play_url)s' % self.data, 2)
-            jsonrpc(method='Player.Open', params={'item': {'file': self.data.get('play_url')}})
+            jsonrpc(method='Player.Open', params={'item': {'file': self.repaired_play_url(self.data.get('play_url'))}})
         else:
             self.log('Sending %(encoding)s data to add-on to play: %(play_info)s' % dict(encoding=self.encoding, **self.data), 2)  # pylint: disable=use-dict-literal
             event(message=self.data.get('id'), data=self.data.get('play_info'), sender='upnextprovider', encoding=self.encoding)

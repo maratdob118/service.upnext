@@ -7,6 +7,7 @@
     <category label="30600"> <!-- Behaviour -->
         <setting label="30603" type="enum" id="autoPlayMode" lvalues="30040|30041" default="0"/>
         <setting label="30032" type="bool" id="enablePlaylist" default="false"/>
+        <setting label="30901" type="bool" id="repairFragileUrls" default="true"/>
         <setting label="30605" type="bool" id="includeWatched" default="false"/>
         <setting label="30607" type="slider" id="playedInARow" default="3" range="0,1,15" option="int"/>
         <setting label="30609" type="lsep"/> <!-- Autoplay duration -->

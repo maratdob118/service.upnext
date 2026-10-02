@@ -180,6 +180,10 @@ msgctxt "#30703"
 msgid "Disable Up Next"
 msgstr ""
 
+msgctxt "#30901"
+msgid "Repair fragile add-on URLs"
+msgstr ""
+
 msgctxt "#30705"
 msgid "Log level"
 msgstr ""
