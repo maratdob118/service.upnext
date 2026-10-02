@@ -3,7 +3,6 @@
 
 from __future__ import absolute_import, division, unicode_literals
 from xbmc import sleep, PLAYLIST_VIDEO, PLAYLIST_MUSIC
-from playurl import repair_play_url
 from torrentcache import elementum_dirs, parse_elementum_history_url, restore_torrent_file
 from utils import event, get_int, get_setting_bool, get_setting_int, jsonrpc, log as ulog
 
@@ -191,14 +190,11 @@ class Api:
         return restored
 
     def repaired_play_url(self, url):
-        """Repair a fragile add-on URL unless disabled in settings."""
+        """Ensure an Elementum URL resolves unless disabled in settings."""
         if not url or not get_setting_bool('repairFragileUrls'):
             return url
         self.ensure_elementum_torrent(url)
-        repaired, changed = repair_play_url(url)
-        if changed:
-            self.log('Repaired fragile play URL: %s -> %s' % (url, repaired), 2)
-        return repaired
+        return url
 
     def play_addon_item(self):
         if self.data.get('play_url'):
