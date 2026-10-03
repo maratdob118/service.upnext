@@ -13,7 +13,8 @@ from utils import decode_json, get_property, get_setting_bool, kodi_version_majo
 # Seconds between background restores of cached .torrent files. Runs
 # regardless of episode tracking: playlist auto-advance or a manual
 # "next" press can play an Elementum URL without Up Next driving.
-RESTORE_SWEEP_INTERVAL = 15
+# Kept short: deletion and autoplay are usually only seconds apart.
+RESTORE_SWEEP_INTERVAL = 5
 
 
 class UpNextMonitor(Monitor):

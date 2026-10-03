@@ -11,6 +11,7 @@ from torrentcache import (
     elementum_dirs,
     extract_infohashes,
     parse_elementum_history_url,
+    restore_all_cached,
 )
 from utils import get_setting_bool, log as ulog
 
@@ -115,14 +116,36 @@ class UpNextPlayer(Player):
     def onPlayBackResumed(self):  # pylint: disable=invalid-name
         self.state.pause = False
 
+    def _restore_elementum_torrents(self):
+        """Put cached .torrent files back the moment playback stops.
+
+        This is the deterministic hook: Kodi advances to the next
+        playlist item (or Up Next plays it) right after the stop, while
+        Elementum deletes the .torrent file in the same instant. A
+        restore here wins that race for every play path - queued
+        autoplay, playlist advance or a manual next press.
+        """
+        if not get_setting_bool('repairFragileUrls'):
+            return
+        try:
+            temp_dir, cache_dir = elementum_dirs()
+            restored = restore_all_cached(temp_dir, cache_dir)
+        except Exception:
+            return
+        for infohash in restored:
+            ulog('Restored cached .torrent on stop: %s' % infohash,
+                 name=self.__class__.__name__, level=2)
+
     def onPlayBackStopped(self):  # pylint: disable=invalid-name
         """Will be called when user stops playing a file"""
+        self._restore_elementum_torrents()
         self.reset_queue()
         self.api.reset_addon_data()
         self.state = State()  # Reset state
 
     def onPlayBackEnded(self):  # pylint: disable=invalid-name
         """Will be called when Kodi has ended playing a file"""
+        self._restore_elementum_torrents()
         self.reset_queue()
         # Only reset state if not playing the next episode
         if not self.state.playing_next:
